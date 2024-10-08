@@ -1,67 +1,65 @@
-import os
-import numpy as np
 import pandas as pd
-import cv2
-from sklearn.model_selection import train_test_split
-
-# Paths
-DATA_PATH = "./data/lfw-deepfunneled/"
-CSV_PATH = "./data/csv/people.csv"
+import os
 
 
-# Load CSV file with names and labels
+# Load the dataset
 def load_data():
-    people_df = pd.read_csv(CSV_PATH)
+    data = pd.read_csv("data/csv/people.csv")  # Adjust the path if necessary
+
+    # Ensure the 'images' column is an integer (ignore NaN values)
+    data["images"] = (
+        pd.to_numeric(data["images"], errors="coerce").fillna(0).astype(int)
+    )
+
+    # Ensure the 'name' column is treated as a string, replace NaN values with empty strings
+    data["name"] = data["name"].astype(str).fillna("")
 
     image_paths = []
     labels = []
 
-    for _, row in people_df.iterrows():
-        person_name = row["Name"]  # Assuming CSV has a 'Name' column
-        label = row["Label"]  # Assuming there's a 'Label' column
+    for index, row in data.iterrows():
+        person_name = row["name"]
 
-        # For each person, get all images
-        person_dir = os.path.join(DATA_PATH, person_name)
-        if os.path.exists(person_dir):
-            for img_name in os.listdir(person_dir):
-                img_path = os.path.join(person_dir, img_name)
-                image_paths.append(img_path)
-                labels.append(label)
+        # Skip rows where name is empty or invalid
+        if person_name == "" or pd.isna(person_name):
+            print(
+                f"Warning: Skipping row with missing or invalid name at index {index}"
+            )
+            continue
+
+        num_images = row["images"]
+
+        # Assuming images are stored under 'lfw-deepfunneled' directory
+        folder_path = f"data/lfw-deepfunneled/{person_name.replace(' ', '_')}"
+
+        for i in range(1, num_images + 1):
+            image_file = f"{person_name.replace(' ', '_')}_{str(i).zfill(4)}.jpg"
+            image_path = os.path.join(folder_path, image_file)
+
+            if os.path.exists(image_path):
+                image_paths.append(image_path)
+                labels.append(person_name)
+            else:
+                print(f"Warning: {image_path} not found")
 
     return image_paths, labels
 
 
-# Preprocess the images (resize and normalize)
-def preprocess_image(image_path, img_size=(128, 128)):
-    img = cv2.imread(image_path)
-    img = cv2.resize(img, img_size)
-    img = img.astype("float32") / 255.0  # Normalize
-    return img
-
-
-# Prepare data for training
-def prepare_data(img_size=(128, 128)):
+def prepare_data():
     image_paths, labels = load_data()
 
-    X = []
-    y = []
+    # Now you can split your data into train/test or continue with preprocessing
+    from sklearn.model_selection import train_test_split
 
-    for img_path, label in zip(image_paths, labels):
-        img = preprocess_image(img_path, img_size)
-        X.append(img)
-        y.append(label)
-
-    X = np.array(X)
-    y = np.array(y)
-
-    # Split into training and test sets
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+        image_paths, labels, test_size=0.2, random_state=42
     )
 
     return X_train, X_test, y_train, y_test
 
 
+# Testing the preprocessing function
 if __name__ == "__main__":
     X_train, X_test, y_train, y_test = prepare_data()
-    print(f"Training samples: {X_train.shape}, Testing samples: {X_test.shape}")
+    print(f"Training set size: {len(X_train)}")
+    print(f"Test set size: {len(X_test)}")
